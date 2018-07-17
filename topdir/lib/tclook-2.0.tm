@@ -128,18 +128,22 @@ oo::class create ::tclook::View {
         # in the outermost level) into the view, unless the Values lookup
         # results in an empty key, in which case the text in 'values' is
         # inserted into the 'code' field.
-        lassign [::tclook::Values {*}$key] key0 values
-        if {$key0 eq {}} {
-            my code $values
-        } else {
-            my Insert0 $key0
-            dict for {key1 items} $values {
-                my Insert1 $key0 $key1
-                foreach item $items {
-                    my Insert2 $key0 $key1 $item
-                }
+        lassign [::tclook::Values {*}$key] destination key0 values
+        switch $destination {
+            code {
+                my code $values
             }
-            my see $key0
+            view {
+                my Insert0 $key0
+                dict for {key1 items} $values {
+                    my Insert1 $key0 $key1
+                    foreach item $items {
+                        my Insert2 $key0 $key1 $item
+                    }
+                }
+                my see $key0
+            }
+            none { ; }
         }
     }
 
@@ -157,7 +161,7 @@ oo::objdefine ::tclook::Values {
         foreach key {class mixins} {
             dict set values $key [my AddPrefix class [my Info $q $key]]
         }
-        return [list $q $values]
+        return [list view $q $values]
     }
 
     method class desc {
@@ -172,7 +176,7 @@ oo::objdefine ::tclook::Values {
         } else {
             dict set values instances [my AddPrefix object [my Info $q instances]]
         }
-        return [list $q $values]
+        return [list view $q $values]
     }
 
     method namespace desc {
@@ -180,26 +184,26 @@ oo::objdefine ::tclook::Values {
         dict set values vars     [lmap val [info vars $desc\::*] {format {%s %s} var $val}]
         dict set values commands [lmap val [info commands $desc\::*] {format {%s %s} command $val}]
         dict set values children [lmap val [::namespace children $desc] {format {%s %s} $type $val}]
-        return [list [list $type $desc] $values]
+        return [list view [list $type $desc] $values]
     }
 
     method method desc {
         lassign $desc name - orig
         lassign $orig type defi
-        return [list {} [list method $name {*}[info $type definition $defi $name]]]
+        return [list code {} [list method $name {*}[info $type definition $defi $name]]]
     }
 
     method command desc {
         try {
             list proc $desc [info args $desc] [info body $desc]
         } on ok values {
-            return [list {} $values]
+            return [list code {} $values]
         } on error {} {
-            return [list {} {}]
+            return [list code {} {}]
         }
     }
 
-    method var desc {}
+    method var desc { return [list none] }
 
     method AddPrefix {prefix vals} {
         lmap val $vals {format {%s %s} $prefix $val}
