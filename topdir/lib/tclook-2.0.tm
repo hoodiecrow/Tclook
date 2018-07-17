@@ -6,46 +6,57 @@ namespace eval tclook {
 
 # TclOO-based object/class/namespace browser
 
-# 2018-07-16: show public interface only: non-private methods, no variables.
-# Provide a combobox to query through 'info {*}[linsert $id 1 $subcmd]' for
-# information beyond this; also make method names, class and instance names,
-# and namespaces clickable.
-# By default open into a notebook: views to be detachable.
-# Extended view?
+# View is not a megawidget. Currently, if the instance is destroyed, it closes
+# its window. If the window is closed, the instance remains. If the window is
+# closed and 'show' is called again, a new instance is created.
 
-# NOTE filters are methods, so don't link them from the filters field
-
-proc ::tclook::show {{type class} args} {
+proc ::tclook::show args {
     # Ensure that a 'view' exists as a namespace variable.
-    # Check if the asked-for item is already showing. If so, focus on it in the
-    # view, otherwise add it to the view.
+    # Check if the asked-for item is already showing. If so, make it visible,
+    # otherwise add it to the view.
     variable view
-    if {$view eq {}} {
+    if {$view eq {} || ![$view hasWindow]} {
         set view [View new .tclook]
         $view bind <<TreeviewSelect>> {::tclook::TreeviewSelect %W}
     }
-    set key [MakeKey $type {*}$args]
+    set key [MakeKey [uplevel 1 {namespace current}] {*}$args]
     if {[$view exists $key]} {
         $view see $key
     } else {
-        $view insert $key
+        $view insert {*}[Values {*}$key] 
     }
 }
 
-proc ::tclook::MakeKey {type args} {
+proc ::tclook::NamespaceResolve {ns desc} {
+    set _desc [namespace eval $ns [list namespace which $desc]]
+    if {$_desc ne {}} {
+        return $_desc
+    } else {
+        return $desc
+    }
+}
+
+proc ::tclook::MakeKey {ns args} {
     # Create an identifier for an item to be viewed, consisting of a viewing
     # category (object, class, namespace) and a qualified command name.
     if {[llength $args] eq 0} {
-        set desc ::oo::class
+        lassign {class ::oo::class} type desc
+    } elseif {[llength $args] eq 1} {
+        # A single argument must be the name of an object, class, or namespace.
+        set desc [NamespaceResolve $ns [lindex $args 0]]
+        if {[info object isa object $desc]} {
+            set type object
+        } elseif {[info object isa class $desc]} {
+            set type class
+        } elseif {[namespace exists $desc]} {
+            set type namespace
+        } else {
+            return -code error [format {unknown key arguments "%s"} $args]
+        }
     } else {
-        set desc $args
+        set desc [NamespaceResolve $ns [lassign $args type]]
     }
-    set _desc [uplevel 2 [list namespace which $desc]]
-    if {$_desc eq {}} {
-        return [list $type $desc]
-    } else {
-        return [list $type $_desc]
-    }
+    return [list $type $desc]
 }
 
 proc ::tclook::TreeviewSelect w {
@@ -123,12 +134,11 @@ oo::class create ::tclook::View {
         $view insert [list $key0 $key1] end -text $item -tags leaf
     }
 
-    method insert key {
+    method insert {destination key0 values} {
         # Insert a whole item as a three-level dictionary (with a single member
         # in the outermost level) into the view, unless the Values lookup
         # results in an empty key, in which case the text in 'values' is
         # inserted into the 'code' field.
-        lassign [::tclook::Values {*}$key] destination key0 values
         switch $destination {
             code {
                 my code $values
@@ -145,6 +155,10 @@ oo::class create ::tclook::View {
             }
             none { ; }
         }
+    }
+
+    method hasWindow {} {
+        winfo exists $view
     }
 
 }
