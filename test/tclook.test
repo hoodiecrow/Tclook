@@ -1,0 +1,48 @@
+package require tcltest
+namespace import ::tcltest::*
+
+::tcltest::configure {*}$argv
+
+::tcltest::loadTestedCommands
+
+package require tclook
+
+test show-1.0 {} -body {
+    ::tclook::show foo {object oo::object}
+} -cleanup {
+    ::log::lvSuppressLE i 1
+} -result {invalid command name "::tclook::Foo::get"} -returnCodes error
+
+test list-1.0 {} -body {
+    ::tclook::Dict::get {object oo::object}
+} -cleanup {
+    ::log::lvSuppressLE i 1
+} -result {title {S {object oo::object}} type {S object} name {S oo::object} isa {S {class object}} class {S ::oo::class} namespace {S ::oo::Obj1} mixins {L {}} filters {L {}} variables {L {}} vars {L {}} methods {L {<cloned> create createWithNamespace destroy eval new unknown variable varname}}}
+
+test list-1.1 {} -body {
+    ::tclook::Dict::get {class oo::object}
+} -cleanup {
+} -result {title {S {class oo::object}} type {S class} name {S oo::object} superclass {S {}} mixins {L {}} filters {L {}} variables {L {}} instances {L {}} methods {L {<cloned> destroy eval unknown variable varname}}}
+
+test list-1.2 {} -body {
+    ::tclook::Dict::get {namespace ::tcl}
+} -cleanup {
+} -result {title {S {namespace ::tcl}} type {S namespace} name {S ::tcl} vars {L {::tcl::auto_oldpath ::tcl::Path ::tcl::history ::tcl::Dir}} procs {L {::tcl::HistIndex ::tcl::CopyDirectory ::tcl::HistEvent ::tcl::InitWinEnv ::tcl::HistNextID ::tcl::EnvTraceProc ::tcl::HistInfo ::tcl::MacOSXPkgUnknown ::tcl::HistKeep ::tcl::HistAdd ::tcl::pkgindex ::tcl::HistRedo ::tcl::HistChange ::tcl::HistClear}} commands {L {::tcl::HistIndex ::tcl::pkgconfig ::tcl::CopyDirectory ::tcl::HistEvent ::tcl::Bgerror ::tcl::InitWinEnv ::tcl::HistNextID ::tcl::EnvTraceProc ::tcl::HistInfo ::tcl::MacOSXPkgUnknown ::tcl::HistKeep ::tcl::HistAdd ::tcl::pkgindex ::tcl::history ::tcl::HistRedo ::tcl::HistChange ::tcl::prefix ::tcl::HistClear}} children {L {::tcl::file ::tcl::tm ::tcl::info ::tcl::clock ::tcl::binary ::tcl::namespace ::tcl::array ::tcl::encoding ::tcl::zlib ::tcl::mathop ::tcl::unsupported ::tcl::Pkg ::tcl::chan ::tcl::dict ::tcl::mathfunc ::tcl::prefix ::tcl::string}}}
+
+test list-1.3 {} -setup {
+    oo::class create Foo {method foo {a b} {list $b $a}}
+} -body {
+    ::tclook::Dict::get {method {class ::Foo foo}}
+} -cleanup {
+    ::Foo destroy
+} -result {title {S {method {class ::Foo foo}}} type {S method} mtype {S method} name {S foo} args {S {a b}} body {S {list $b $a}}}
+
+test list-1.4 {} -setup {
+    proc foo {a b} {list $b $a}
+} -body {
+    ::tclook::Dict::command {command ::foo}
+} -cleanup {
+    rename ::foo {}
+} -result {title {S {command ::foo}} type {S command} name {S ::foo} args {S {a b}} body {S {list $b $a}}}
+
+cleanupTests
