@@ -6,28 +6,25 @@ namespace eval tclook {
 
 # TclOO-based object/class/namespace browser
 
-# View is not a megawidget. Currently, if the instance is destroyed, it closes
-# its window. If the window is closed, the instance remains. If the window is
-# closed and 'tclook' is called again, a new instance is created.
+# Anything can be a view if it responds to the methods 'exists {key}', 'display
+# {key}', and 'insert {destination key0 values}', OR has a 'exists' method that
+# always returns false, in which case only the 'insert' method needs to be
+# working. See docs for the Print class.
+
+# If no view exists, a Print view is created which outputs all info to stdout.
+# A View class which places the info in a ttk::treeview is included in the
+# package. To use that instead, set ::tclook::view to an instance of that
+# class.
 
 proc ::tclook::tclook args {
     # Ensure that a 'view' exists as a namespace variable.
     # Check if the asked-for item is already showing. If so, make it visible,
     # otherwise add it to the view.
     variable view
-    if no {
-        if {$view eq {} || ![$view hasWindow]} {
-            set view [View new .tclook]
-            $view bind <<TreeviewSelect>> {::tclook::TreeviewSelect %W}
-        }
-    } else {
-        if {$view eq {}} {
-            set view [Print new]
-        }
-    }
+    if {$view eq {}} { set view [Print new] }
     set key [MakeKey [uplevel 1 {namespace current}] {*}$args]
     if {[$view exists $key]} {
-        $view see $key
+        $view display $key
     } else {
         $view insert {*}[Values {*}$key] 
     }
@@ -50,8 +47,11 @@ proc ::tclook::MakeKey {ns args} {
             return {class ::oo::class}
         }
         1 {
-            # A single argument must be the name of an object, class, a namespace, or a Tcl command procedure.
-            # The slightly cumbersome test for a proc (instead of just [llength [info procs $desc]] > 0) is to handle proc names that are glob patterns
+            # A single argument must be the name of an object, class, a
+            # namespace, or a Tcl command procedure.
+            # The slightly cumbersome test for a proc (instead of just [llength
+            # [info procs $desc]] > 0) is to handle proc names that are glob
+            # patterns.
             set desc [ResolveNamespace $ns [lindex $args 0]]
             if {[info object isa class $desc]} {
                 return [list class $desc]
@@ -64,6 +64,9 @@ proc ::tclook::MakeKey {ns args} {
             }
         }
         default {
+            # 'desc' here might not be a command name at all, but the
+            # ResolveNamespace command will just pass the original string back
+            # in that case.
             set desc [ResolveNamespace $ns [lassign $args type]]
             return [list $type $desc]
         }
@@ -78,10 +81,10 @@ oo::class create ::tclook::Print {
 
     method insert {destination key0 values} {
         switch $destination {
-            code {
+            side {
                 puts $values
             }
-            view {
+            main {
                 puts $key0
                 dict for {key1 items} $values {
                     puts "  [string totitle $key1]"
@@ -96,45 +99,42 @@ oo::class create ::tclook::Print {
 
 }
 
-proc ::tclook::TreeviewSelect w {
-    # Handler for <<TreeviewSelect>> events. If the clicked-on item is a leaf
-    # item, use the 'tclook' command with its text as argument list to add it to
-    # the view.
-    set item [$w focus]
-    if {[$w tag has leaf $item]} {
-        ::tclook::tclook {*}[$w item $item -text]
-    }
-}
-
 catch { ::tclook::View destroy }
 oo::class create ::tclook::View {
-    variable view code bigfont
+    variable main side bigfont
 
-    constructor args {
+    constructor {{top .tclook}} {
         package require Tk
-        lassign $args top
-        if {$top eq {}} {
-            set top .tclook
-        }
         destroy $top
         toplevel $top
-        set view [ttk::treeview $top.view -show tree -yscroll [list $top.vs set]]
-        set vs [ttk::scrollbar $top.vs -orient vertical -command [list $view yview]]
-        grid $view $vs -sticky news
-        set code [text $top.code -height 9 -width 30 -yscroll [list $top.cs set]]
-        set cs [ttk::scrollbar $top.cs -orient vertical -command [list $code yview]]
-        grid $code $cs -sticky news
-        grid columnconfigure $top $view -weight 1
-        grid rowconfigure $top $view -weight 1
-        grid rowconfigure $top $code -weight 1
+        set main [ttk::treeview $top.main -show tree -yscroll [list $top.vs set]]
+        set vs [ttk::scrollbar $top.vs -orient vertical -command [list $main yview]]
+        grid $main $vs -sticky news
+        set side [text $top.side -height 9 -width 30 -yscroll [list $top.cs set]]
+        set cs [ttk::scrollbar $top.cs -orient vertical -command [list $side yview]]
+        grid $side $cs -sticky news
+        grid columnconfigure $top $main -weight 1
+        grid rowconfigure $top $main -weight 1
+        grid rowconfigure $top $side -weight 1
         set bigfont [my MakeFont TkDefaultFont -weight bold -size 10]
-        $view tag configure big -font $bigfont
-        oo::objdefine [self] forward exists $view exists
+        $main tag configure big -font $bigfont
+        oo::objdefine [self] forward exists $main exists
+        bind $main <<TreeviewSelect>> [namespace code [list my TreeviewSelect %W]]
     }
 
     destructor {
         font delete $bigfont
-        catch { destroy [winfo parent $view] }
+        catch { destroy [winfo parent $main] }
+    }
+
+    method TreeviewSelect w {
+        # Handler for <<TreeviewSelect>> events. If the clicked-on item is a leaf
+        # item, use the 'tclook' command with its text as argument list to add it to
+        # the view.
+        set item [$w focus]
+        if {[$w tag has leaf $item]} {
+            ::tclook::tclook {*}[$w item $item -text]
+        }
     }
 
     method MakeFont {name args} {
@@ -145,42 +145,29 @@ oo::class create ::tclook::View {
         return $font
     }
 
-    method bind args {
-        bind $view {*}$args
-    }
-
-    method see key {
-        $view see $key
-        $view item $key -open true
-    }
-
-    method code text {
-        $code delete 1.0 end
-        $code insert end $text
-    }
-
     method Insert0 key0 {
-        $view insert {} end -id $key0 -text $key0 -tags big
+        $main insert {} end -id $key0 -text $key0 -tags big
     }
 
     method Insert1 {key0 key1} {
-        $view insert $key0 end -id [list $key0 $key1] -text [string totitle $key1]
+        $main insert $key0 end -id [list $key0 $key1] -text [string totitle $key1]
     }
 
     method Insert2 {key0 key1 item} {
-        $view insert [list $key0 $key1] end -text $item -tags leaf
+        $main insert [list $key0 $key1] end -text $item -tags leaf
     }
 
     method insert {destination key0 values} {
         # Insert a whole item as a three-level dictionary (with a single member
         # in the outermost level) into the view, unless the Values lookup
         # results in an empty key, in which case the text in 'values' is
-        # inserted into the 'code' field.
+        # inserted into the 'side' field.
         switch $destination {
-            code {
-                my code $values
+            side {
+                $side delete 1.0 end
+                $side insert end $values
             }
-            view {
+            main {
                 my Insert0 $key0
                 dict for {key1 items} $values {
                     my Insert1 $key0 $key1
@@ -188,14 +175,15 @@ oo::class create ::tclook::View {
                         my Insert2 $key0 $key1 $item
                     }
                 }
-                my see $key0
+                my display $key0
             }
             none { ; }
         }
     }
 
-    method hasWindow {} {
-        winfo exists $view
+    method display key {
+        $main see $key
+        $main item $key -open true
     }
 
 }
@@ -203,55 +191,72 @@ oo::class create ::tclook::View {
 catch { ::tclook::Values destroy }
 oo::object create ::tclook::Values
 oo::objdefine ::tclook::Values {
+    # The public methods are the kinds of things that the package can found out
+    # info about. They return a tuple <dest,key0,values> where 'dest' is side,
+    # main, or none. 'side' means to show text in a secondary space, 'main'
+    # means to add info to the main display, and 'none' means that the output
+    # should be suppressed. 'key0' only has meaning for 'dest'=main: it is the
+    # string that future calls to '{view} exist' will use to determine if the
+    # info should be displayed or inserted. 'values' is a dict of info about
+    # the thing.
 
     method object desc {
-        set q [list [self method] $desc]
-        dict set values methods [my Methods {*}$q]
-        set key namespace
-        dict set values $key [my AddPrefix $key [my Info $q $key]]
-        foreach key {class mixins} {
-            dict set values $key [my AddPrefix class [my Info $q $key]]
+        set type [self method]
+        set key0 [list $type $desc]
+        foreach key {methods namespace class mixins} {
+            dict set values $key [switch $key {
+                methods   { my Methods {*}$key0 }
+                namespace { my AddPrefix $key [my Info $key0 $key] }
+                class     -
+                mixins    { my AddPrefix class [my Info $key0 $key] }
+            }]
         }
-        return [list view $q $values]
+        return [list main $key0 $values]
     }
 
     method class desc {
         set type [self method]
-        set q [list $type $desc]
-        dict set values methods [my Methods {*}$q]
-        foreach key {superclasses subclasses mixins} {
-            dict set values $key [my AddPrefix $type [my Info $q $key]]
+        set key0 [list $type $desc]
+        foreach key {methods superclasses subclasses mixins instances} {
+            dict set values $key [switch $key {
+                methods      { my Methods {*}$key0 }
+                superclasses -
+                subclasses -
+                mixins       { my AddPrefix $type [my Info $key0 $key] }
+                instances    {
+                    if {[info object isa metaclass $desc]} {
+                        my AddPrefix class [my Info $key0 $key]
+                    } else {
+                        my AddPrefix object [my Info $key0 $key]
+                    }
+                }
+            }]
         }
-        set key instances
-        if {[info object isa metaclass $desc]} {
-            dict set values $key [my AddPrefix class [my Info $q $key]]
-        } else {
-            dict set values $key [my AddPrefix object [my Info $q $key]]
-        }
-        return [list view $q $values]
+        return [list main $key0 $values]
     }
 
     method namespace desc {
         set type [self method]
+        set key0 [list $type $desc]
         dict set values vars [my AddPrefix var [info vars $desc\::*]]
         dict set values commands [my AddPrefix command [info commands $desc\::*]]
         dict set values children [my AddPrefix $type [namespace children $desc]]
-        return [list view [list $type $desc] $values]
+        return [list main $key0 $values]
     }
 
     method method desc {
         lassign $desc name - orig
         lassign $orig type defi
-        return [list code {} [list method $name {*}[info $type definition $defi $name]]]
+        return [list side {} [list method $name {*}[info $type definition $defi $name]]]
     }
 
     method command desc {
         try {
             list proc $desc [info args $desc] [info body $desc]
         } on ok values {
-            return [list code {} $values]
+            return [list side {} $values]
         } on error {} {
-            return [list code {} {}]
+            return [list side {} {}]
         }
     }
 
@@ -261,8 +266,8 @@ oo::objdefine ::tclook::Values {
         lmap val $vals {format {%s %s} $prefix $val}
     }
 
-    method Info {q key} {
-        info {*}[linsert $q 1 $key]
+    method Info {key0 key} {
+        info {*}[linsert $key0 1 $key]
     }
 
     method Methods {type desc} {

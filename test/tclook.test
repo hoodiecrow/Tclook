@@ -12,17 +12,17 @@ test list-1.0 {} -body {
     ::tclook::Values object oo::object
 } -cleanup {
     ::log::lvSuppressLE i 1
-} -result {view {object oo::object} {methods {} namespace {{namespace ::oo::Obj1}} class {{class ::oo::class}} mixins {}}}
+} -result {main {object oo::object} {methods {} namespace {{namespace ::oo::Obj1}} class {{class ::oo::class}} mixins {}}}
 
 test list-1.1 {} -body {
     ::tclook::Values class oo::object
 } -cleanup {
-} -result {view {class oo::object} {methods {} superclasses {} subclasses {{class ::oo::class} {class ::oo::Slot} {class ::tclook::View}} mixins {} instances {{object ::tclook::Values}}}}
+} -result {main {class oo::object} {methods {} superclasses {} subclasses {{class ::oo::class} {class ::oo::Slot} {class ::tclook::Print} {class ::tclook::View}} mixins {} instances {{object ::tclook::Values}}}}
 
 test list-1.2 {} -body {
     ::tclook::Values namespace ::tcl
 } -cleanup {
-} -result {view {namespace ::tcl} {vars {{var ::tcl::auto_oldpath} {var ::tcl::Path} {var ::tcl::history} {var ::tcl::Dir}} commands {{command ::tcl::HistIndex} {command ::tcl::pkgconfig} {command ::tcl::CopyDirectory} {command ::tcl::HistEvent} {command ::tcl::Bgerror} {command ::tcl::InitWinEnv} {command ::tcl::HistNextID} {command ::tcl::EnvTraceProc} {command ::tcl::HistInfo} {command ::tcl::MacOSXPkgUnknown} {command ::tcl::HistKeep} {command ::tcl::HistAdd} {command ::tcl::pkgindex} {command ::tcl::history} {command ::tcl::HistRedo} {command ::tcl::HistChange} {command ::tcl::prefix} {command ::tcl::HistClear}} children {{namespace ::tcl::file} {namespace ::tcl::tm} {namespace ::tcl::info} {namespace ::tcl::clock} {namespace ::tcl::binary} {namespace ::tcl::namespace} {namespace ::tcl::array} {namespace ::tcl::encoding} {namespace ::tcl::zlib} {namespace ::tcl::mathop} {namespace ::tcl::unsupported} {namespace ::tcl::Pkg} {namespace ::tcl::chan} {namespace ::tcl::dict} {namespace ::tcl::mathfunc} {namespace ::tcl::prefix} {namespace ::tcl::string}}}}
+} -result {main {namespace ::tcl} {vars {{var ::tcl::auto_oldpath} {var ::tcl::Path} {var ::tcl::history} {var ::tcl::Dir}} commands {{command ::tcl::HistIndex} {command ::tcl::pkgconfig} {command ::tcl::CopyDirectory} {command ::tcl::HistEvent} {command ::tcl::Bgerror} {command ::tcl::InitWinEnv} {command ::tcl::HistNextID} {command ::tcl::EnvTraceProc} {command ::tcl::HistInfo} {command ::tcl::MacOSXPkgUnknown} {command ::tcl::HistKeep} {command ::tcl::HistAdd} {command ::tcl::pkgindex} {command ::tcl::history} {command ::tcl::HistRedo} {command ::tcl::HistChange} {command ::tcl::prefix} {command ::tcl::HistClear}} children {{namespace ::tcl::file} {namespace ::tcl::tm} {namespace ::tcl::info} {namespace ::tcl::clock} {namespace ::tcl::binary} {namespace ::tcl::namespace} {namespace ::tcl::array} {namespace ::tcl::encoding} {namespace ::tcl::zlib} {namespace ::tcl::mathop} {namespace ::tcl::unsupported} {namespace ::tcl::Pkg} {namespace ::tcl::chan} {namespace ::tcl::dict} {namespace ::tcl::mathfunc} {namespace ::tcl::prefix} {namespace ::tcl::string}}}}
 
 test list-1.3 {} -setup {
     oo::class create Foo {method foo {a b} {list $b $a}}
@@ -30,7 +30,7 @@ test list-1.3 {} -setup {
     ::tclook::Values method {foo {a b} {class ::Foo}}
 } -cleanup {
     ::Foo destroy
-} -result {code {} {method foo {a b} {list $b $a}}}
+} -result {side {} {method foo {a b} {list $b $a}}}
 
 test list-1.4 {} -setup {
     proc foo {a b} {list $b $a}
@@ -38,6 +38,6 @@ test list-1.4 {} -setup {
     ::tclook::Values command ::foo
 } -cleanup {
     rename ::foo {}
-} -result {code {} {proc ::foo {a b} {list $b $a}}}
+} -result {side {} {proc ::foo {a b} {list $b $a}}}
 
 cleanupTests
