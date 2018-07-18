@@ -11,6 +11,7 @@ namespace eval tclook {
 # closed and 'show' is called again, a new instance is created.
 
 proc ::tclook::show args {
+    log::log d [info level 0] 
     # Ensure that a 'view' exists as a namespace variable.
     # Check if the asked-for item is already showing. If so, make it visible,
     # otherwise add it to the view.
@@ -185,19 +186,20 @@ oo::objdefine ::tclook::Values {
         foreach key {superclasses subclasses mixins} {
             dict set values $key [my AddPrefix $type [my Info $q $key]]
         }
+        set key instances
         if {[info object isa metaclass $desc]} {
-            dict set values instances [my AddPrefix class [my Info $q instances]]
+            dict set values $key [my AddPrefix class [my Info $q $key]]
         } else {
-            dict set values instances [my AddPrefix object [my Info $q instances]]
+            dict set values $key [my AddPrefix object [my Info $q $key]]
         }
         return [list view $q $values]
     }
 
     method namespace desc {
         set type [self method]
-        dict set values vars     [lmap val [info vars $desc\::*] {format {%s %s} var $val}]
-        dict set values commands [lmap val [info commands $desc\::*] {format {%s %s} command $val}]
-        dict set values children [lmap val [::namespace children $desc] {format {%s %s} $type $val}]
+        dict set values vars [my AddPrefix var [info vars $desc\::*]]
+        dict set values commands [my AddPrefix command [info commands $desc\::*]]
+        dict set values children [my AddPrefix $type [namespace children $desc]]
         return [list view [list $type $desc] $values]
     }
 
@@ -217,7 +219,7 @@ oo::objdefine ::tclook::Values {
         }
     }
 
-    method var desc { return [list none] }
+    method var desc { return [list none {} {}] }
 
     method AddPrefix {prefix vals} {
         lmap val $vals {format {%s %s} $prefix $val}
