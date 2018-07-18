@@ -1,6 +1,6 @@
 
 namespace eval tclook {
-    namespace export show
+    namespace export tclook
     variable view {}
 }
 
@@ -8,17 +8,22 @@ namespace eval tclook {
 
 # View is not a megawidget. Currently, if the instance is destroyed, it closes
 # its window. If the window is closed, the instance remains. If the window is
-# closed and 'show' is called again, a new instance is created.
+# closed and 'tclook' is called again, a new instance is created.
 
-proc ::tclook::show args {
-    log::log d [info level 0] 
+proc ::tclook::tclook args {
     # Ensure that a 'view' exists as a namespace variable.
     # Check if the asked-for item is already showing. If so, make it visible,
     # otherwise add it to the view.
     variable view
-    if {$view eq {} || ![$view hasWindow]} {
-        set view [View new .tclook]
-        $view bind <<TreeviewSelect>> {::tclook::TreeviewSelect %W}
+    if no {
+        if {$view eq {} || ![$view hasWindow]} {
+            set view [View new .tclook]
+            $view bind <<TreeviewSelect>> {::tclook::TreeviewSelect %W}
+        }
+    } else {
+        if {$view eq {}} {
+            set view [Print new]
+        }
     }
     set key [MakeKey [uplevel 1 {namespace current}] {*}$args]
     if {[$view exists $key]} {
@@ -28,7 +33,7 @@ proc ::tclook::show args {
     }
 }
 
-proc ::tclook::NamespaceResolve {ns desc} {
+proc ::tclook::ResolveNamespace {ns desc} {
     set _desc [namespace eval $ns [list namespace which $desc]]
     if {$_desc ne {}} {
         return $_desc
@@ -40,33 +45,64 @@ proc ::tclook::NamespaceResolve {ns desc} {
 proc ::tclook::MakeKey {ns args} {
     # Create an identifier for an item to be viewed, consisting of a viewing
     # category (object, class, namespace) and a qualified command name.
-    if {[llength $args] eq 0} {
-        lassign {class ::oo::class} type desc
-    } elseif {[llength $args] eq 1} {
-        # A single argument must be the name of an object, class, or namespace.
-        set desc [NamespaceResolve $ns [lindex $args 0]]
-        if {[info object isa object $desc]} {
-            set type object
-        } elseif {[info object isa class $desc]} {
-            set type class
-        } elseif {[namespace exists $desc]} {
-            set type namespace
-        } else {
-            return -code error [format {unknown key arguments "%s"} $args]
+    switch [llength $args] {
+        0 {
+            return {class ::oo::class}
         }
-    } else {
-        set desc [NamespaceResolve $ns [lassign $args type]]
+        1 {
+            # A single argument must be the name of an object, class, a namespace, or a Tcl command procedure.
+            # The slightly cumbersome test for a proc (instead of just [llength [info procs $desc]] > 0) is to handle proc names that are glob patterns
+            set desc [ResolveNamespace $ns [lindex $args 0]]
+            if {[info object isa class $desc]} {
+                return [list class $desc]
+            } elseif {[info object isa object $desc]} {
+                return [list object $desc]
+            } elseif {[namespace exists $desc]} {
+                return [list namespace $desc]
+            } elseif {$desc in [info procs [namespace qualifiers $desc]::*]} {
+                return [list command $desc]
+            }
+        }
+        default {
+            set desc [ResolveNamespace $ns [lassign $args type]]
+            return [list $type $desc]
+        }
     }
-    return [list $type $desc]
+    return -code error [format {unknown key arguments "%s"} $args]
+}
+
+catch { ::tclook::Print destroy }
+oo::class create ::tclook::Print {
+
+    method exists key { expr 0 }
+
+    method insert {destination key0 values} {
+        switch $destination {
+            code {
+                puts $values
+            }
+            view {
+                puts $key0
+                dict for {key1 items} $values {
+                    puts "  [string totitle $key1]"
+                    foreach item $items {
+                        puts "    $item"
+                    }
+                }
+            }
+            none { ; }
+        }
+    }
+
 }
 
 proc ::tclook::TreeviewSelect w {
     # Handler for <<TreeviewSelect>> events. If the clicked-on item is a leaf
-    # item, use the 'show' command with its text as argument list to add it to
+    # item, use the 'tclook' command with its text as argument list to add it to
     # the view.
     set item [$w focus]
     if {[$w tag has leaf $item]} {
-        ::tclook::show {*}[$w item $item -text]
+        ::tclook::tclook {*}[$w item $item -text]
     }
 }
 
@@ -266,5 +302,5 @@ if {![info exists TCLOOK] || !$TCLOOK} {
     oo::class create Bar {superclass Foo ; method Qux {} {my foo m n} ; method quux {} {my foo x y}}
     Foo create foo
     Bar create bar
-    ::tclook::show
+    ::tclook::tclook
 }
