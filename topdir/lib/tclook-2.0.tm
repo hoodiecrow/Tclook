@@ -6,42 +6,35 @@ namespace eval tclook {
 
 # TclOO-based object/class/namespace browser
 
-# Anything can be a view if it responds to the methods 'exists {key}', 'display
-# {key}', and 'insert {destination key0 values}', OR has a 'exists' method that
-# always returns false, in which case only the 'insert' method needs to be
-# working. See docs for the Print class.
-
-# If no view exists, a Print view is created which outputs all info to stdout.
-# A View class which places the info in a ttk::treeview is included in the
-# package. To use that instead, set ::tclook::view to an instance of that
-# class.
-
 proc ::tclook::tclook args {
-    # Ensure that a 'view' exists as a namespace variable.
+    # Ensure that a 'view' exists.
+    # Figure out a key string for the thing.
     # Check if the asked-for item is already showing. If so, make it visible,
     # otherwise add it to the view.
     variable view
-    if {$view eq {}} { set view [Print new] }
+    if {$view eq {}} { set view [PrintView new] }
     set key [MakeKey [uplevel 1 {namespace current}] {*}$args]
     if {[$view exists $key]} {
         $view display $key
     } else {
-        $view insert {*}[Values {*}$key] 
+        $view insert $key
     }
 }
 
-proc ::tclook::ResolveNamespace {ns desc} {
-    set _desc [namespace eval $ns [list namespace which $desc]]
+proc ::tclook::ResolveNamespace {ns args} {
+    set _desc [namespace eval $ns [list namespace which {*}$args]]
     if {$_desc ne {}} {
         return $_desc
     } else {
-        return $desc
+        return [lindex $args end]
     }
 }
 
 proc ::tclook::MakeKey {ns args} {
-    # Create an identifier for an item to be viewed, consisting of a viewing
-    # category (object, class, namespace) and a qualified command name.
+    # Create an identifier for an item to be viewed. It will be a string that
+    # is a proper list of 1) a thing type and 2) a qualified command name (for
+    # object, class, namespace, command), a qualified variable name (for set),
+    # or a method descriptor.
     switch [llength $args] {
         0 {
             return {class ::oo::class}
@@ -53,33 +46,50 @@ proc ::tclook::MakeKey {ns args} {
             # [info procs $desc]] > 0) is to handle proc names that are glob
             # patterns.
             set desc [ResolveNamespace $ns [lindex $args 0]]
-            if {[info object isa class $desc]} {
-                return [list class $desc]
-            } elseif {[info object isa object $desc]} {
-                return [list object $desc]
-            } elseif {[namespace exists $desc]} {
+            if {[namespace exists $desc]} {
                 return [list namespace $desc]
             } elseif {$desc in [info procs [namespace qualifiers $desc]::*]} {
                 return [list command $desc]
+            } elseif {[info object isa class $desc]} {
+                return [list class $desc]
+            } elseif {[info object isa object $desc]} {
+                return [list object $desc]
             }
         }
         default {
-            # 'desc' here might not be a command name at all, but the
-            # ResolveNamespace command will just pass the original string back
-            # in that case.
-            set desc [ResolveNamespace $ns [lassign $args type]]
-            return [list $type $desc]
+            switch [lindex $args 0] {
+                method {
+                    set desc [lassign $args type]
+                    return [list $type $desc]
+                }
+                set {
+                    set type set
+                    set desc [ResolveNamespace $ns -variable [lindex $args end]]
+                    return [list $type $desc]
+                }
+                object -
+                class -
+                namespace -
+                command {
+                    set desc [ResolveNamespace $ns [lassign $args type]]
+                    return [list $type $desc]
+                }
+            }
         }
     }
     return -code error [format {unknown key arguments "%s"} $args]
 }
 
-catch { ::tclook::Print destroy }
-oo::class create ::tclook::Print {
+catch { ::tclook::PrintView destroy }
+oo::class create ::tclook::PrintView {
 
     method exists key { expr 0 }
 
-    method insert {destination key0 values} {
+    forward display my insert
+    forward replace my insert
+
+    method insert key {
+        lassign [::tclook::Values {*}$key] destination key0 values
         switch $destination {
             side {
                 puts $values
@@ -99,26 +109,27 @@ oo::class create ::tclook::Print {
 
 }
 
-catch { ::tclook::View destroy }
-oo::class create ::tclook::View {
+catch { ::tclook::TreeView destroy }
+oo::class create ::tclook::TreeView {
     variable main side bigfont
 
     constructor {{top .tclook}} {
         package require Tk
+        # init widget
         destroy $top
         toplevel $top
-        set main [ttk::treeview $top.main -show tree -yscroll [list $top.vs set]]
-        set vs [ttk::scrollbar $top.vs -orient vertical -command [list $main yview]]
-        grid $main $vs -sticky news
-        set side [text $top.side -height 9 -width 30 -yscroll [list $top.cs set]]
-        set cs [ttk::scrollbar $top.cs -orient vertical -command [list $side yview]]
-        grid $side $cs -sticky news
+        set main [ttk::treeview $top.main -show tree -yscroll [list $top.s1 set]]
+        set s1 [ttk::scrollbar $top.s1 -orient vertical -command [list $main yview]]
+        grid $main $s1 -sticky news
+        set side [text $top.side -height 9 -width 30 -yscroll [list $top.s2 set]]
+        set s2 [ttk::scrollbar $top.s2 -orient vertical -command [list $side yview]]
+        grid $side $s2 -sticky news
         grid columnconfigure $top $main -weight 1
         grid rowconfigure $top $main -weight 1
         grid rowconfigure $top $side -weight 1
+        # init widget data
         set bigfont [my MakeFont TkDefaultFont -weight bold -size 10]
         $main tag configure big -font $bigfont
-        oo::objdefine [self] forward exists $main exists
         bind $main <<TreeviewSelect>> [namespace code [list my TreeviewSelect %W]]
     }
 
@@ -134,6 +145,8 @@ oo::class create ::tclook::View {
         set item [$w focus]
         if {[$w tag has leaf $item]} {
             ::tclook::tclook {*}[$w item $item -text]
+        } elseif {[$w tag has big $item]} {
+            my replace [$w item $item -text]
         }
     }
 
@@ -145,36 +158,54 @@ oo::class create ::tclook::View {
         return $font
     }
 
-    method Insert0 key0 {
-        $main insert {} end -id $key0 -text $key0 -tags big
+    method Insert {parent args} {
+        $main insert $parent end {*}$args
     }
 
-    method Insert1 {key0 key1} {
-        $main insert $key0 end -id [list $key0 $key1] -text [string totitle $key1]
+    method InsertValues {parent values} {
+        dict for {key items} $values {
+            set key1 [list $parent $key]
+            my Insert $parent -id $key1 -text [string totitle $key]
+            foreach item $items {
+                my Insert $key1 -text $item -tags leaf
+            }
+        }
     }
 
-    method Insert2 {key0 key1 item} {
-        $main insert [list $key0 $key1] end -text $item -tags leaf
-    }
-
-    method insert {destination key0 values} {
-        # Insert a whole item as a three-level dictionary (with a single member
-        # in the outermost level) into the view, unless the Values lookup
-        # results in an empty key, in which case the text in 'values' is
-        # inserted into the 'side' field.
+    method exists key { $main exists $key }
+    
+    method insert key {
+        log::log d [info level 0] 
+        # If 'destination' is side, put 'values' in the side field. If it is
+        # main, insert 'values' as an info dictionary into the view under the
+        # key 'key0'.
+        lassign [::tclook::Values {*}$key] destination key0 values
         switch $destination {
             side {
                 $side delete 1.0 end
                 $side insert end $values
             }
             main {
-                my Insert0 $key0
-                dict for {key1 items} $values {
-                    my Insert1 $key0 $key1
-                    foreach item $items {
-                        my Insert2 $key0 $key1 $item
-                    }
+                my Insert {} -id $key0 -text $key0 -tags big
+                my InsertValues $key0 $values
+                my display $key0
+            }
+            none { ; }
+        }
+    }
+
+    method replace key {
+        lassign [::tclook::Values {*}$key] destination key0 values
+        switch $destination {
+            side {
+                $side delete 1.0 end
+                $side insert end $values
+            }
+            main {
+                foreach child [$main children $key0] {
+                    $main delete [list $child]
                 }
+                my InsertValues $key0 $values
                 my display $key0
             }
             none { ; }
@@ -238,7 +269,7 @@ oo::objdefine ::tclook::Values {
     method namespace desc {
         set type [self method]
         set key0 [list $type $desc]
-        dict set values vars [my AddPrefix var [info vars $desc\::*]]
+        dict set values vars [my AddPrefix set [info vars $desc\::*]]
         dict set values commands [my AddPrefix command [info commands $desc\::*]]
         dict set values children [my AddPrefix $type [namespace children $desc]]
         return [list main $key0 $values]
@@ -260,7 +291,20 @@ oo::objdefine ::tclook::Values {
         }
     }
 
-    method var desc { return [list none {} {}] }
+    method set desc {
+        if {[array exists $desc]} {
+            set d [lsort -dictionary -stride 2 -index 0 [array get $desc]]
+            set len [::tcl::mathfunc::max {*}[lmap name [dict keys $d] {
+                string length $name
+            }]]
+            dict for {name value} $d {
+                lappend result [format {%*s  %s} $len [list $name] [list $value]]
+            }
+            return [list side {} [join $result \n]]
+        } else {
+            return [list side {} [set $desc]]
+        }
+    }
 
     method AddPrefix {prefix vals} {
         lmap val $vals {format {%s %s} $prefix $val}
@@ -271,13 +315,14 @@ oo::objdefine ::tclook::Values {
     }
 
     method Methods {type desc} {
-        set result {}
         set methods [info $type methods $desc -all]
-        foreach method $methods {
+        lmap method $methods {
             set call [info $type call $desc $method]
             lassign [lindex $call 0] calltype - class -
             # TODO I suppose calltype = 'filter' means that the next item should be examined?
-            if {![string match ::oo::* $class]} {
+            if {[string match ::oo::* $class]} {
+                continue
+            } else {
                 if {$class eq "object"} {
                     set mtype [info object methodtype $desc $method]
                     lassign [info object definition $desc $method] args
@@ -287,25 +332,9 @@ oo::objdefine ::tclook::Values {
                     lassign [info class definition $class $method] args
                     set orig [list class $class]
                 }
-                lappend result [list $mtype $method $args $orig]
+                list $mtype $method $args $orig
             }
         }
-        return $result
     }
 
-}
-
-if {![info exists TCLOOK] || !$TCLOOK} {
-    set TCLOOK 1
-    package require log
-    cd ~/code/Tclook/
-    tcl::tm::path add topdir/lib/
-    ::log::lvSuppressLE i 0
-    catch { package forget tclook } ; package require tclook
-    source -encoding utf-8 automaton-20180628-2.tcl
-    oo::class create Foo {method foo {a b} {list $b $a}}
-    oo::class create Bar {superclass Foo ; method Qux {} {my foo m n} ; method quux {} {my foo x y}}
-    Foo create foo
-    Bar create bar
-    ::tclook::tclook
 }
