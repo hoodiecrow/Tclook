@@ -15,6 +15,12 @@ Provides one command, `tclook`, and two classes, `PrintView` and `TreeView`. The
 
 The information shown is a snapshot of the contents of the thing. Changes to the thing will not be reflected in a `TreeView` (but clicking on a thing key will reload the thing).
 
+Install for use by copying this file
+
+https://github.com/hoodiecrow/Tclook/blob/master/topdir/lib/tclook-2.0.tm
+
+put it somewhere where on the `tm` path and use `package require tclook`.
+
 ### Invocation
 
 The `tclook` command can be invoked with several argument sets.
