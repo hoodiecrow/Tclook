@@ -61,9 +61,8 @@ Minimal. An error is raised if the command can't figure out its arguments. It is
 
 ### Bugs and fixes
 
- * **2018-07-20:** Can now fetch information (such as there is) for `forward` methods.
-
- * **2018-07-20:** Distinguish between class and object for defining name from `info c|o call \<...\>`.
-
- * **2018-07-20:** Look past filters in the call chain.
+ * **2018-07-20:**
+    * Can now fetch information (such as there is) for `forward` methods.
+    * Distinguish between class and object for defining name from `info c|o call \<...\>`.
+    * Look past filters in the call chain.
 
