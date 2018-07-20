@@ -58,3 +58,10 @@ If no view exists when `tclook` is first called, a PrintView view is created. To
 ### Error handling
 
 Minimal. An error is raised if the command can't figure out its arguments. It is assumed that this tool will be able to fail without messing up anything important. Resource management is also minimal: destroying a view also destroys the view's Tk resources, but closing a window leaves the view instance behind.
+
+### Bugs and fixes
+
+ * **2018-07-20:** Can now fetch information (such as there is) for `forward` methods.
+
+ * **2018-07-20:** Distinguish between class and object for defining name from `info c|o call \<...\>`.
+

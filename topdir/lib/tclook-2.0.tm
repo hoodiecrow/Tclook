@@ -176,7 +176,6 @@ oo::class create ::tclook::TreeView {
     method exists key { $main exists $key }
     
     method insert key {
-        log::log d [info level 0] 
         # If 'destination' is side, put 'values' in the side field. If it is
         # main, insert 'values' as an info dictionary into the view under the
         # key 'key0'.
@@ -283,7 +282,6 @@ oo::objdefine ::tclook::Values {
     }
 
     method forward desc {
-        log::log d [info level 0] 
         lassign $desc name - orig
         lassign $orig type defi
         return [list side {} [list forward $name {*}[info $type forward $defi $name]]]
@@ -343,16 +341,29 @@ oo::objdefine ::tclook::Values {
                     }
                     set orig [list object $desc]
                 } else {
-                    set mtype [info class methodtype $class $method]
-                    switch $mtype {
-                        method {
-                            lassign [info class definition $desc $method] args
+                    if {[info object isa class $class]} {
+                        set mtype [info class methodtype $class $method]
+                        switch $mtype {
+                            method {
+                                lassign [info class definition $class $method] args
+                            }
+                            forward {
+                                set args [info class forward $class $method]
+                            }
                         }
-                        forward {
-                            set args [info class forward $desc $method]
+                        set orig [list class $class]
+                    } else {
+                        set mtype [info object methodtype $class $method]
+                        switch $mtype {
+                            method {
+                                lassign [info object definition $class $method] args
+                            }
+                            forward {
+                                set args [info object forward $class $method]
+                            }
                         }
+                        set orig [list object $class]
                     }
-                    set orig [list class $class]
                 }
                 list $mtype $method $args $orig
             }
