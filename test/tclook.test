@@ -177,4 +177,26 @@ test tclook-2.3 {} -setup {
 } -output {forward foo ::list a b
 }
 
+test tclook-2.4 {} -setup {
+    oo::class create Foo {
+        method foo args {}
+        method bar args {}
+        filter bar
+    }
+} -body {
+    ::tclook::tclook ::Foo
+} -cleanup {
+    Foo destroy
+    ::log::lvSuppressLE i 1
+} -output {class ::Foo
+  Methods
+    method bar args {class ::Foo}
+    method foo args {class ::Foo}
+  Superclasses
+    class ::oo::object
+  Subclasses
+  Mixins
+  Instances
+}
+
 cleanupTests

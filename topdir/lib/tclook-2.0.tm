@@ -323,50 +323,52 @@ oo::objdefine ::tclook::Values {
     method Methods {type desc} {
         set methods [info $type methods $desc -all]
         lmap method $methods {
-            set call [info $type call $desc $method]
-            lassign [lindex $call 0] calltype - class -
-            # TODO I suppose calltype = 'filter' means that the next item should be examined?
-            if {[string match ::oo::* $class]} {
+            foreach call [info $type call $desc $method] {
+                lassign $call calltype - class -
+                if {$calltype ne "filter"} {
+                    break
+                }
+            }
+            if {$calltype eq "unknown" || [string match ::oo::* $class]} {
                 continue
-            } else {
-                if {$class eq "object"} {
-                    set mtype [info object methodtype $desc $method]
-                    switch $mtype {
-                        method {
-                            lassign [info object definition $desc $method] args
-                        }
-                        forward {
-                            set args [info object forward $desc $method]
-                        }
+            }
+            if {$class eq "object"} {
+                set mtype [info object methodtype $desc $method]
+                switch $mtype {
+                    method {
+                        lassign [info object definition $desc $method] args
                     }
-                    set orig [list object $desc]
-                } else {
-                    if {[info object isa class $class]} {
-                        set mtype [info class methodtype $class $method]
-                        switch $mtype {
-                            method {
-                                lassign [info class definition $class $method] args
-                            }
-                            forward {
-                                set args [info class forward $class $method]
-                            }
-                        }
-                        set orig [list class $class]
-                    } else {
-                        set mtype [info object methodtype $class $method]
-                        switch $mtype {
-                            method {
-                                lassign [info object definition $class $method] args
-                            }
-                            forward {
-                                set args [info object forward $class $method]
-                            }
-                        }
-                        set orig [list object $class]
+                    forward {
+                        set args [info object forward $desc $method]
                     }
                 }
-                list $mtype $method $args $orig
+                set orig [list object $desc]
+            } else {
+                if {[info object isa class $class]} {
+                    set mtype [info class methodtype $class $method]
+                    switch $mtype {
+                        method {
+                            lassign [info class definition $class $method] args
+                        }
+                        forward {
+                            set args [info class forward $class $method]
+                        }
+                    }
+                    set orig [list class $class]
+                } else {
+                    set mtype [info object methodtype $class $method]
+                    switch $mtype {
+                        method {
+                            lassign [info object definition $class $method] args
+                        }
+                        forward {
+                            set args [info object forward $class $method]
+                        }
+                    }
+                    set orig [list object $class]
+                }
             }
+            list $mtype $method $args $orig
         }
     }
 

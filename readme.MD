@@ -65,3 +65,5 @@ Minimal. An error is raised if the command can't figure out its arguments. It is
 
  * **2018-07-20:** Distinguish between class and object for defining name from `info c|o call \<...\>`.
 
+ * **2018-07-20:** Look past filters in the call chain.
+
