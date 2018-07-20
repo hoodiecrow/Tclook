@@ -58,7 +58,8 @@ proc ::tclook::MakeKey {ns args} {
         }
         default {
             switch [lindex $args 0] {
-                method {
+                method -
+                forward {
                     set desc [lassign $args type]
                     return [list $type $desc]
                 }
@@ -281,6 +282,13 @@ oo::objdefine ::tclook::Values {
         return [list side {} [list method $name {*}[info $type definition $defi $name]]]
     }
 
+    method forward desc {
+        log::log d [info level 0] 
+        lassign $desc name - orig
+        lassign $orig type defi
+        return [list side {} [list forward $name {*}[info $type forward $defi $name]]]
+    }
+
     method command desc {
         try {
             list proc $desc [info args $desc] [info body $desc]
@@ -325,11 +333,25 @@ oo::objdefine ::tclook::Values {
             } else {
                 if {$class eq "object"} {
                     set mtype [info object methodtype $desc $method]
-                    lassign [info object definition $desc $method] args
+                    switch $mtype {
+                        method {
+                            lassign [info object definition $desc $method] args
+                        }
+                        forward {
+                            set args [info object forward $desc $method]
+                        }
+                    }
                     set orig [list object $desc]
                 } else {
                     set mtype [info class methodtype $class $method]
-                    lassign [info class definition $class $method] args
+                    switch $mtype {
+                        method {
+                            lassign [info class definition $desc $method] args
+                        }
+                        forward {
+                            set args [info class forward $desc $method]
+                        }
+                    }
                     set orig [list class $class]
                 }
                 list $mtype $method $args $orig

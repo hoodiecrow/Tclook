@@ -115,6 +115,7 @@ test tclook-1.3 {} -setup {
 } -body {
     ::tclook::tclook method foo {a b} {class ::Foo}
 } -cleanup {
+    Foo destroy
     ::log::lvSuppressLE i 1
 } -output {method foo {a b} {list $b $a}
 }
@@ -126,6 +127,54 @@ test tclook-1.4 {} -setup {
 } -cleanup {
     rename ::foobarbaz {}
 } -output {proc ::foobarbaz {a b} {list $b $a}
+}
+
+test tclook-2.0 {} -setup {
+    oo::class create Foo {forward foo list a b}
+} -body {
+    ::tclook::tclook Foo
+} -cleanup {
+    Foo destroy
+    ::log::lvSuppressLE i 1
+} -output {class ::Foo
+  Methods
+    forward foo {list a b} {class ::Foo}
+  Superclasses
+    class ::oo::object
+  Subclasses
+  Mixins
+  Instances
+}
+
+test tclook-2.1 {} -setup {
+    oo::class create Foo {forward foo list a b}
+} -body {
+    ::tclook::tclook forward foo {list a b} {class ::Foo}
+} -cleanup {
+    Foo destroy
+    ::log::lvSuppressLE i 1
+} -output {forward foo list a b
+}
+
+test tclook-2.2 {} -setup {
+    oo::object create Foo
+    oo::objdefine Foo forward foo list a b
+} -body {
+    ::tclook::tclook forward foo {list a b} {object ::Foo}
+} -cleanup {
+    Foo destroy
+    ::log::lvSuppressLE i 1
+} -output {forward foo list a b
+}
+
+test tclook-2.3 {} -setup {
+    oo::class create Foo {forward foo [namespace which list] a b}
+} -body {
+    ::tclook::tclook forward foo {list a b} {class ::Foo}
+} -cleanup {
+    Foo destroy
+    ::log::lvSuppressLE i 1
+} -output {forward foo ::list a b
 }
 
 cleanupTests
